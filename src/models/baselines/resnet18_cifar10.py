@@ -19,3 +19,6 @@ def create_resnet18_baseline(num_classes: int = 10):
     in_features = model.fc.in_features
     model.fc = nn.Linear(in_features, num_classes)
     return model
+# 兼容旧名字（如果你不想改 train_resnet18.py 也可以用这个）
+def create_resnet18_baseline(num_classes: int = 10):
+    return create_resnet18_cifar10(num_classes)
