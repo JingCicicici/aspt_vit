@@ -1,0 +1,38 @@
+现在可以直接在命令行调的有：
+
+--epochs：训练轮数（你刚跑的是 50）
+
+--lr：学习率（现在默认 3e-4）
+
+--weight_decay：权重衰减（默认 5e-4）
+
+--train_ratio：训练数据比例（1.0 是全量，小样本实验可以用 0.1 / 0.2 等）
+
+--lambda_view / --lambda_smooth：你刚才加进来的两个正则系数（若已经按我说的改了）
+
+--no_reg：关闭正则（baseline / ablation 用）
+
+1.python train_ours_cli.py \
+  --model ours_full \
+  --train_ratio 1.0 \
+  --epochs 50 \
+  --lr 3e-4
+结果：
+[ours_full_ratio1.0_noregFalse] Training done. Best Val Acc=0.7766
+[ours_full_ratio1.0_noregFalse] TEST Loss=0.7042, Acc=0.7844
+
+
+2.稍大一点的学习率：1e-3
+
+python train_ours_cli.py \
+  --model ours_full \
+  --train_ratio 1.0 \
+  --epochs 50 \
+  --lr 1e-3
+
+[ours_full_ratio1.0_noregFalse] Training done. Best Val Acc=0.7448
+[ours_full_ratio1.0_noregFalse] TEST Loss=0.8161, Acc=0.7381
+
+
+
+ResNet18 (SGD+StepLR, from-scratch) = 92.56% test。

@@ -3,7 +3,7 @@ import torch.nn as nn
 from torchvision.models import resnet18
 
 
-def create_resnet18_baseline(num_classes: int = 10):
+def create_resnet18_cifar10(num_classes: int = 10):
     """
     构建一个用于 CIFAR-10 的 ResNet-18 分类模型
     不使用预训练权重，从头训练。
@@ -14,6 +14,9 @@ def create_resnet18_baseline(num_classes: int = 10):
     except TypeError:
         # 旧版本接口
         model = resnet18(pretrained=False)
+
+    model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+    model.maxpool = nn.Identity()
 
     # 替换最后一层全连接，使输出类别数等于 num_classes
     in_features = model.fc.in_features

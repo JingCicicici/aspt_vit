@@ -103,7 +103,7 @@ class MultiHeadSelfAttention(nn.Module):
         # reshape -> [3, B, num_heads, N, head_dim]
         qkv = qkv.reshape(B, N, 3, self.num_heads, self.head_dim)
         qkv = qkv.permute(2, 0, 3, 1, 4)
-        q, v, k = qkv[0], qkv[1], qkv[2]   # 注意这里使用 (q, k, v) 的顺序
+        q, k, v = qkv[0], qkv[1], qkv[2]   # 注意这里使用 (q, k, v) 的顺序
 
         # 注意力权重: [B, num_heads, N, N]
         attn = (q @ k.transpose(-2, -1)) * self.scale

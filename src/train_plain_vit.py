@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from datasets.cifar10 import get_cifar10_dataloaders
-from models.vit_core import create_plain_vit_cifar10
+from models.components.vit_core import create_plain_vit_cifar10
 from engine.trainer import train_classification_model
 
 

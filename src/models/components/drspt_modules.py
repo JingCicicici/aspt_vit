@@ -18,7 +18,9 @@ import torch.nn.functional as F
 
 __all__ = [
     "LearnableShiftViews",
+    "FixedShiftViews",              # 新增
     "DynamicRoutedSPT",
+    "SimpleViewAggregator",         # 新增
     "ReliabilityTopKHead",
     "view_entropy_loss",
     "reliability_smoothness_loss",
@@ -119,6 +121,92 @@ class LearnableShiftViews(nn.Module):
 
 
 # ----------------------------------------------------------------------
+# 1.b FixedShiftViews: 非可学习的多视图平移模块（消融用）
+# ----------------------------------------------------------------------
+
+class FixedShiftViews(nn.Module):
+    """
+    Fixed Shift Views Module（非可学习）
+
+    功能：
+        使用固定的（dy, dx）像素偏移，对输入图像构造 V 个平移视图。
+        用于和 LearnableShiftViews 做消融比较。
+
+    输入:
+        x: [B, C, H, W]
+
+    输出:
+        views: list[Tensor]，长度 = num_views，每个 [B, C, H, W]
+    """
+
+    def __init__(self, num_views: int = 5, offsets: Optional[torch.Tensor] = None):
+        super().__init__()
+        self.num_views = num_views
+
+        if offsets is None:
+            # 与 LearnableShiftViews 的初始化保持一致：
+            # center, up, down, left, right
+            offsets = torch.tensor([
+                [0,  0],   # center
+                [-1, 0],   # up
+                [1,  0],   # down
+                [0, -1],   # left
+                [0,  1],   # right
+            ], dtype=torch.long)
+
+        # 只取前 num_views 个偏移
+        offsets = offsets[:num_views]
+        # 注册为 buffer（不是可学习参数），在 forward 时直接使用
+        self.register_buffer("offsets", offsets)   # [V, 2]
+
+    @staticmethod
+    def _shift_one(x: torch.Tensor, dy: int, dx: int) -> torch.Tensor:
+        """
+        对一个 batch 的图像做整数像素平移，空缺用 0 填充，不循环。
+        dy: + 向下，- 向上
+        dx: + 向右，- 向左
+        """
+        B, C, H, W = x.shape
+        out = torch.zeros_like(x)
+
+        # 源区域
+        y0_src = max(0, dy)
+        y1_src = H + min(0, dy)
+        x0_src = max(0, dx)
+        x1_src = W + min(0, dx)
+
+        # 目标区域
+        y0_dst = max(0, -dy)
+        y1_dst = y0_dst + (y1_src - y0_src)
+        x0_dst = max(0, -dx)
+        x1_dst = x0_dst + (x1_src - x0_src)
+
+        if y1_src > y0_src and x1_src > x0_src:
+            out[:, :, y0_dst:y1_dst, x0_dst:x1_dst] = x[:, :, y0_src:y1_src, x0_src:x1_src]
+
+        return out
+
+    def forward(self, x: torch.Tensor):
+        """
+        x: [B, C, H, W]
+        return: list[Tensor], len = num_views, 每个视图 [B, C, H, W]
+        """
+        views = []
+        B, C, H, W = x.shape
+
+        for v in range(self.num_views):
+            dy, dx = self.offsets[v].tolist()   # 整数像素偏移
+            v_img = self._shift_one(x, int(dy), int(dx))
+            views.append(v_img)
+
+        return views
+
+
+
+
+
+
+# ----------------------------------------------------------------------
 # 2. DynamicRoutedSPT: 多视图动态路由分词
 # ----------------------------------------------------------------------
 
@@ -211,6 +299,57 @@ class DynamicRoutedSPT(nn.Module):
         r = 1.0 - entropy / max_entropy            # 归一化到 [0,1]
 
         return c, a, r
+
+
+
+# ----------------------------------------------------------------------
+# 2.b SimpleViewAggregator: 简单视图均值聚合（消融用）
+# ----------------------------------------------------------------------
+
+class SimpleViewAggregator(nn.Module):
+    """
+    Simple View Aggregator（无动态路由版）
+
+    功能：
+        给定多视图 patch tokens x_mv，直接在视图维度做均值：
+            c = mean_v x_mv
+        并返回：
+            - c: [B, N, C] 聚合后的 tokens
+            - a: [B, V, N] 视图权重（这里是均匀分布 1/V）
+            - r: [B, N]    可靠性（这里简单设为全 1）
+
+    用途：
+        - 作为 DynamicRoutedSPT 的消融对照：仅仅“多视图 + 简单平均”，
+          不进行 routing-by-agreement。
+    """
+
+    def __init__(self, num_views: Optional[int] = None):
+        super().__init__()
+        self.num_views = num_views
+
+    def forward(self, x_mv: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        x_mv: [B, V, N, C]
+        返回:
+            c: [B, N, C]
+            a: [B, V, N]
+            r: [B, N]
+        """
+        B, V, N, C = x_mv.shape
+        if self.num_views is not None:
+            assert V == self.num_views, f"SimpleViewAggregator 期望 V={self.num_views}, 但输入 V={V}"
+
+        # 直接在视图维度做均值
+        c = x_mv.mean(dim=1)  # [B, N, C]
+
+        # 构造均匀视图权重 a，以及全 1 的可靠性 r，方便与 DR-SPT 接口对齐
+        a = x_mv.new_full((B, V, N), 1.0 / V)  # [B, V, N]
+        r = x_mv.new_ones(B, N)               # [B, N]
+
+        return c, a, r
+
+
+
 
 
 # ----------------------------------------------------------------------

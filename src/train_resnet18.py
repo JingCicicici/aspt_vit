@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from datasets.cifar10 import get_cifar10_dataloaders
-from models.resnet18_baseline import create_resnet18_baseline
+from models.baselines.resnet18_cifar10 import create_resnet18_baseline
 from engine.trainer import train_classification_model
 
 
