@@ -84,12 +84,15 @@ class DRSPTViT_Ablation(nn.Module):
         attn_drop: float = 0.0,
         proj_drop: float = 0.0,
         mlp_drop: float = 0.0,
+        drop_path: float = 0.0,  # ✅ 新增：stochastic depth 最大值
+
     ):
         super().__init__()
 
         self.img_size = img_size
         self.num_views = num_views
         self.use_reliability_head = use_reliability_head
+        self.num_patches = num_patches
 
         # -----------------------------
         # 1) 多视图模块: Learnable vs Fixed
@@ -110,7 +113,9 @@ class DRSPTViT_Ablation(nn.Module):
             embed_dim=embed_dim,
         )
         num_patches = self.patch_embed.num_patches
-
+        # ✅ 给 smoothness 正则用：训练脚本会 getattr(model, "grid_size", None)
+        gs = self.patch_embed.grid_size
+        self.grid_size = (gs, gs)
         # -----------------------------
         # 3) 多视图聚合: DR-SPT vs 简单平均
         # -----------------------------
@@ -140,6 +145,7 @@ class DRSPTViT_Ablation(nn.Module):
             attn_drop=attn_drop,
             proj_drop=proj_drop,
             mlp_drop=mlp_drop,
+            drop_path=drop_path,  # ✅ 新增
             norm_layer=nn.LayerNorm,
         )
 
@@ -234,16 +240,28 @@ def create_ours_full_cifar10() -> nn.Module:
         patch_size=4,
         in_chans=3,
         num_classes=10,
-        embed_dim=384,
-        depth=6,
-        num_heads=6,
-        mlp_ratio=4.0,
+
+        # ✅ 更稳的容量配置（建议从这里起步）
+        embed_dim=256,
+        depth=10,
+        num_heads=8,
+        mlp_ratio=3.0,
+
         num_views=5,
         num_iters=3,
         topk_ratio=0.25,
+
         use_learnable_shift=True,
         use_drspt=True,
-        use_reliability_head=True,
+
+        # ✅ 主模型不用 topk（你自己也说这是正确方向）
+        use_reliability_head=False,
+
+        # ✅ 结构正则（不属于数据增强）
+        attn_drop=0.0,
+        proj_drop=0.0,
+        mlp_drop=0.0,
+        drop_path=0.1,  # ✅ 关键
     )
     return model
 
@@ -266,7 +284,7 @@ def create_ours_no_shift_cifar10() -> nn.Module:
         topk_ratio=0.25,
         use_learnable_shift=False,   # 关键
         use_drspt=True,
-        use_reliability_head=True,
+        use_reliability_head=False,
     )
     return model
 
@@ -289,7 +307,7 @@ def create_ours_no_drspt_cifar10() -> nn.Module:
         topk_ratio=0.25,
         use_learnable_shift=True,
         use_drspt=False,       # 关键
-        use_reliability_head=True,
+        use_reliability_head=False,
     )
     return model
 

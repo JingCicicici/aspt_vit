@@ -16,9 +16,26 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class DropPath(nn.Module):
+    """Stochastic Depth per sample"""
+    def __init__(self, drop_prob: float = 0.0):
+        super().__init__()
+        self.drop_prob = float(drop_prob)
+
+    def forward(self, x):
+        if self.drop_prob == 0.0 or not self.training:
+            return x
+        keep_prob = 1.0 - self.drop_prob
+        shape = (x.shape[0],) + (1,) * (x.ndim - 1)  # (B,1,1,...)
+        random_tensor = keep_prob + torch.rand(shape, dtype=x.dtype, device=x.device)
+        random_tensor = random_tensor.floor()
+        return x.div(keep_prob) * random_tensor
+
+
 # ---------------------------
 # 1. Patch Embedding
 # ---------------------------
+
 
 class PatchEmbed(nn.Module):
     """
@@ -169,6 +186,7 @@ class ViTEncoderBlock(nn.Module):
         attn_drop: float = 0.0,
         proj_drop: float = 0.0,
         mlp_drop: float = 0.0,
+        drop_path: float = 0.0,              # ✅ 新增
         norm_layer: nn.Module = nn.LayerNorm,
     ):
         super().__init__()
@@ -180,14 +198,16 @@ class ViTEncoderBlock(nn.Module):
             attn_drop=attn_drop,
             proj_drop=proj_drop,
         )
+        self.drop_path1 = DropPath(drop_path)  # ✅ 新增
+
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = MLP(dim=dim, hidden_dim=mlp_hidden_dim, dropout=mlp_drop)
+        self.drop_path2 = DropPath(drop_path)  # ✅ 新增
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: [B, N, D]
-        x = x + self.attn(self.norm1(x))
-        x = x + self.mlp(self.norm2(x))
+        x = x + self.drop_path1(self.attn(self.norm1(x)))  # ✅ 包起来
+        x = x + self.drop_path2(self.mlp(self.norm2(x)))   # ✅ 包起来
         return x
 
 
@@ -206,9 +226,14 @@ class ViTEncoder(nn.Module):
         attn_drop: float = 0.0,
         proj_drop: float = 0.0,
         mlp_drop: float = 0.0,
+        drop_path: float = 0.0,              # ✅ 新增：最大 drop_path
         norm_layer: nn.Module = nn.LayerNorm,
     ):
         super().__init__()
+
+        # ✅ 每层从 0 线性增加到 drop_path（DeiT/ConvNeXt 常用做法）
+        dpr = torch.linspace(0.0, float(drop_path), steps=depth).tolist()
+
         self.layers = nn.ModuleList([
             ViTEncoderBlock(
                 dim=dim,
@@ -218,14 +243,14 @@ class ViTEncoder(nn.Module):
                 attn_drop=attn_drop,
                 proj_drop=proj_drop,
                 mlp_drop=mlp_drop,
+                drop_path=dpr[i],              # ✅ 每层不同
                 norm_layer=norm_layer,
             )
-            for _ in range(depth)
+            for i in range(depth)
         ])
         self.norm = norm_layer(dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: [B, N, D]
         for blk in self.layers:
             x = blk(x)
         x = self.norm(x)
@@ -284,6 +309,7 @@ class PlainViTClassifier(nn.Module):
         attn_drop: float = 0.0,
         proj_drop: float = 0.0,
         mlp_drop: float = 0.0,
+        drop_path: float = 0.0,  # ✅ 新增
     ):
         super().__init__()
 
@@ -309,6 +335,7 @@ class PlainViTClassifier(nn.Module):
             attn_drop=attn_drop,
             proj_drop=proj_drop,
             mlp_drop=mlp_drop,
+            drop_path=drop_path,  # ✅ 新增
             norm_layer=nn.LayerNorm,
         )
 

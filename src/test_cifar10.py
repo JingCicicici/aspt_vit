@@ -30,13 +30,16 @@ def build_model(model_name: str):
             from models.baselines.vit_plain_cifar10 import create_vit_plain_cifar10
         return create_vit_plain_cifar10()
 
+    # if model_name == "ours_full":
+    #     from models.methods.ours_drspt_vit_ablation import create_ours_full_cifar10
+    #     return create_ours_full_cifar10()
     if model_name == "ours_full":
-        from models.methods.ours_drspt_vit_ablation import create_ours_full_cifar10
-        return create_ours_full_cifar10()
+        from models.methods.ours_drspt_vit_ablation import create_ours_no_reliability_head_cifar10
+        return create_ours_no_reliability_head_cifar10()
 
-    if model_name == "ours_no_shift":
-        from models.methods.ours_drspt_vit_ablation import create_ours_no_shift_cifar10
-        return create_ours_no_shift_cifar10()
+    # if model_name == "ours_no_shift":
+    #     from models.methods.ours_drspt_vit_ablation import create_ours_no_shift_cifar10
+    #     return create_ours_no_shift_cifar10()
 
     if model_name == "ours_no_drspt":
         from models.methods.ours_drspt_vit_ablation import create_ours_no_drspt_cifar10

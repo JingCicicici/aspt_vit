@@ -93,8 +93,8 @@ class LearnableShiftViews(nn.Module):
             dy_px, dx_px = self.raw_offsets[v]  # 标量（像素偏移）
 
             # 如有需要，可以使用 tanh 对 raw_offsets 限幅:
-            # dy_px = torch.tanh(dy_px) * 2.0
-            # dx_px = torch.tanh(dx_px) * 2.0
+            dy_px = torch.tanh(dy_px) * 1.0
+            dx_px = torch.tanh(dx_px) * 1.0
 
             dy_norm = dy_px * scale_y
             dx_norm = dx_px * scale_x
@@ -457,8 +457,17 @@ def view_entropy_loss(a: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
         loss = ce_loss + lambda_view * L_view
     """
     # 在视图维度上计算熵
+    # entropy = -(a * (a + eps).log()).sum(dim=1)  # [B, N]
+    # return entropy.mean()
+    V = a.size(1)
     entropy = -(a * (a + eps).log()).sum(dim=1)  # [B, N]
-    return entropy.mean()
+    H = entropy.mean()  # 标量
+
+    # 目标熵：取 log(V) 的一部分（0.5 是一个稳健起点）
+    H_target = 0.5 * math.log(V + eps)
+
+    # 只在熵低于目标时惩罚；熵足够高则 loss=0
+    return torch.relu(H_target - H)
 
 
 def reliability_smoothness_loss(
